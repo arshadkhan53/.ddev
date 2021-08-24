@@ -9,4 +9,7 @@
 - Please pass --uri=site_url with each command e.g ``` ddev drush cr --uri=https://uk.ddev.site ```  or cim ``` ddev drush cim --uri=https://uk.ddev.site ``` 
 
 ### Note: 
- - Make sure your your database name is same as hostname e.g for site(host name) uk database name is uk. Otherwise you would need to cutomise settings.ddev.php as per the change. 
+ - Make sure your your database name is same as hostname e.g for site(host name) uk database name is uk. Otherwise you would need to cutomise settings.ddev.php as per the change.
+
+## References
+- https://stackoverflow.com/questions/49785023/how-can-i-create-and-load-a-second-database-in-ddev 

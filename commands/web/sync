@@ -1,0 +1,310 @@
+#!/usr/bin/php
+<?php
+
+## Description: Synchronise with a remote site.
+## Usage: sync site [remote=test] [-v|--verbose] [-y|--yes] [--simulate] [--skip-db] [--skip-files] [--skip-update] [--skip-config]
+## Example: "ddev sync, ddev sync prod, ddev sync --skip-db"
+
+use Symfony\Component\Console\Input\ArgvInput;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputDefinition;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\ConsoleOutput;
+
+if (!file_exists('./vendor/autoload.php')) {
+  print "Unable to find autoload, please ensure you have run 'composer install'\n";
+  exit(1);
+}
+require_once './vendor/autoload.php';
+
+exit((new class() {
+
+  /**
+   * The command definition.
+   *
+   * @var \Symfony\Component\Console\Input\InputDefinition
+   */
+  private $definition;
+
+  /**
+   * The command input.
+   *
+   * @var \Symfony\Component\Console\Input\InputInterface
+   */
+  private $input;
+
+  /**
+   * The command output.
+   *
+   * @var \Symfony\Component\Console\Output\ConsoleOutput
+   */
+  private $output;
+
+  /**
+   * The local site alias.
+   *
+   * @var string
+   */
+  private $aliasLocal;
+
+  /**
+   * The remove site alias.
+   *
+   * @var string
+   */
+  private $aliasRemote;
+
+  /**
+   * Construct the command.
+   */
+  public function __construct() {
+    $this->definition = new InputDefinition();
+    $this->definition->addArgument(new InputArgument('remote', InputArgument::OPTIONAL, '', ''));
+    $this->definition->addOption(new InputOption('verbose', 'v', InputOption::VALUE_NONE));
+    $this->definition->addOption(new InputOption('yes', 'y', InputOption::VALUE_NONE));
+    $this->definition->addOption(new InputOption('simulate', NULL, InputOption::VALUE_NONE));
+    $this->definition->addOption(new InputOption('skip-db', NULL, InputOption::VALUE_NONE));
+    $this->definition->addOption(new InputOption('skip-files', NULL, InputOption::VALUE_NONE));
+    $this->definition->addOption(new InputOption('skip-update', NULL, InputOption::VALUE_NONE));
+    $this->definition->addOption(new InputOption('skip-config', NULL, InputOption::VALUE_NONE));
+
+    $this->output = new ConsoleOutput();
+  }
+
+  /**
+   * Invoke the command.
+   *
+   * @return int
+   */
+  public function __invoke(): int {
+    try {
+      $this->validateInput();
+
+      // Run the database sync.
+      if (!$this->input->getOption('skip-db')) {
+        $this->output->writeln('<info>Syncing from remote database</info>');
+        $opts = [
+          '--target-dump="' . sys_get_temp_dir() . '/tmp.target.sql.gz"',
+          '--structure-tables-key=lightweight',
+          '--create-db',
+        ];
+        if ($this->input->getOption('simulate')) {
+          $opts[] = '--simulate';
+        }
+        $cmd = $this->buildCommand(
+          'sql-sync',
+          [$this->aliasRemote, $this->aliasLocal],
+          $opts,
+          TRUE,
+          FALSE,
+        );
+        passthru($cmd, $retvar);
+        if ($retvar !== 0) {
+          throw new \RuntimeException('Failed to sync database.');
+        }
+
+        // Clear caches as sanitize may need access apis.
+        $this->output->writeln('<info>Clearing caches</info>');
+        $cmd = $this->buildCommand('cr');
+        if (!$this->input->getOption('simulate')) {
+          passthru($cmd, $retvar);
+          if ($retvar !== 0) {
+            throw new \RuntimeException('Failed to clear caches.');
+          }
+        }
+        else {
+          $this->output->writeln(" [notice] Simulating: {$cmd}");
+        }
+
+        // Always sanitize after a sync.
+        $this->output->writeln('<info>Sanitizing local database</info>');
+        $cmd = $this->buildCommand('sql-sanitize');
+        if (!$this->input->getOption('simulate')) {
+          passthru($cmd, $retvar);
+          if ($retvar !== 0) {
+            throw new \RuntimeException('Failed to sanitize database.');
+          }
+        }
+        else {
+          $this->output->writeln(" [notice] Simulating: {$cmd}");
+        }
+
+        // Run updates by default.
+        if (!$this->input->getOption('skip-update')) {
+          $this->output->writeln('<info>Running database updates</info>');
+          $cmd = $this->buildCommand('updb');
+          if (!$this->input->getOption('simulate')) {
+            passthru($cmd, $retvar);
+            if ($retvar !== 0) {
+              throw new \RuntimeException('Failed to run updates.');
+            }
+          }
+          else {
+            $this->output->writeln(" [notice] Simulating: {$cmd}");
+          }
+        }
+        else {
+          $this->output->writeln('<comment>Skipping database updates</comment>');
+        }
+
+        // Always clear caches otherwise things will be broken!
+        $this->output->writeln('<info>Clearing caches</info>');
+        $cmd = $this->buildCommand('cr');
+        if (!$this->input->getOption('simulate')) {
+          passthru($cmd, $retvar);
+          if ($retvar !== 0) {
+            throw new \RuntimeException('Failed to clear caches.');
+          }
+        }
+        else {
+          $this->output->writeln(" [notice] Simulating: {$cmd}");
+        }
+
+        // Run a config import by default to ensure our env config.
+        if (!$this->input->getOption('skip-config')) {
+          $this->output->writeln('<info>Running config import</info>');
+          $cmd = $this->buildCommand('cim');
+          if (!$this->input->getOption('simulate')) {
+            passthru($cmd, $retvar);
+            if ($retvar !== 0) {
+              throw new \RuntimeException('Failed to import config.');
+            }
+          }
+          else {
+            $this->output->writeln(" [notice] Simulating: {$cmd}");
+          }
+        }
+        else {
+          $this->output->writeln('<comment>Skipping config import</comment>');
+        }
+      }
+      else {
+        $this->output->writeln('<comment>Skipping database sync</comment>');
+      }
+
+      // Run the files sync.
+      if (!$this->input->getOption('skip-files')) {
+        $this->output->writeln('<info>Syncing files remote site</info>');
+        $opts = [
+          '--exclude-paths=styles:css:js',
+        ];
+        if ($this->input->getOption('simulate')) {
+          $opts[] = '--simulate';
+        }
+        $cmd = $this->buildCommand(
+          'rsync',
+          [
+            $this->aliasRemote . ':%files/',
+            $this->aliasLocal . ':%site/files/',
+          ],
+          $opts,
+          TRUE,
+          FALSE,
+        );
+        passthru($cmd, $retvar);
+        if ($retvar !== 0) {
+          throw new \RuntimeException('Failed to sync database.');
+        }
+      }
+      else {
+        $this->output->writeln('<comment>Skipping files sync</comment>');
+      }
+
+      return 0;
+    }
+    // Catch all exceptions so we can render them nicely.
+    catch (\Exception $exception) {
+      $this->output->writeln("<error>{$exception->getMessage()}</error>");
+
+      $verbose = $this->input ?
+        $this->input->getOption('verbose') :
+        (in_array('--verbose', $_SERVER['argv']) ||in_array('-v', $_SERVER['argv']));
+      if ($verbose) {
+        $this->output->writeln($exception->getTraceAsString());
+      }
+      return 1;
+    }
+  }
+
+  /**
+   * Validate the options and arguments.
+   */
+  private function validateInput(): void {
+    // Parse and validate the input according to the definition.
+    $this->input = new ArgvInput(NULL, $this->definition);
+
+    // Build our local and remove aliases.
+    $this->aliasLocal = "@self";
+    // $this->aliasRemote = "@avant_homes.{$this->input->getArgument('remote')}";
+    $this->aliasRemote = "@{$this->input->getArgument('remote')}";
+
+    // Check the local alias exists.
+    $cmd = $this->buildCommand('sa', [$this->aliasLocal], ['--format=json'], FALSE, FALSE);
+    exec($cmd . ' 2> /dev/null', $output, $retvar);
+    if ($retvar !== 0) {
+      throw new \InvalidArgumentException("Local alias '{$this->aliasLocal}' not found.");
+    }
+    $alias_info = json_decode(implode('', $output), TRUE);
+    if (!isset($alias_info[$this->aliasLocal])) {
+      throw new \InvalidArgumentException("Unable to verify local alias '{$this->aliasLocal}'.");
+    }
+    if (isset($alias_info[$this->aliasLocal]['host'])) {
+      throw new \InvalidArgumentException("Local alias '{$this->aliasLocal}' appears to be a remote.");
+    }
+
+    // Check the remote site exists.
+    $output = NULL;
+    $cmd = $this->buildCommand('sa', [$this->aliasRemote], ['--format=json'], FALSE, FALSE);
+    exec($cmd . ' 2> /dev/null', $output, $retvar);
+    if ($retvar !== 0) {
+      throw new \InvalidArgumentException("Remote alias '{$this->aliasRemote}' not found.");
+    }
+  }
+
+  /**
+   * Build the drush command.
+   *
+   * @param string $name
+   *   The command name.
+   * @param array $args
+   *   An array of arguments which are escaped.
+   * @param array $opts
+   *   An array of options which are not escaped.
+   * @param bool $defaults
+   *   Whether to include the default options (--verbose --yes).
+   * @param bool $alias
+   *   Whether to include the local alias.
+   *
+   * @return string
+   *   The command string.
+   */
+  private function buildCommand(string $name, array $args = [], array $opts = [], bool $defaults = TRUE, bool $alias = TRUE) {
+    $cmd = '/var/www/html/vendor/bin/drush --root /var/www/html/docroot ';
+
+    if ($alias) {
+      $cmd .= escapeshellarg($this->aliasLocal) . ' ';
+    }
+
+    if ($defaults) {
+      if ($this->input->getOption('verbose')) {
+        $cmd .= '-v ';
+      }
+      if ($this->input->getOption('yes')) {
+        $cmd .= '-y ';
+      }
+    }
+
+    $cmd .= "{$name} ";
+
+    foreach ($opts as $opt) {
+      $cmd .= "{$opt} ";
+    }
+
+    foreach ($args as $arg) {
+      $cmd .= escapeshellarg($arg) . ' ';
+    }
+
+    return $cmd;
+  }
+
+})());

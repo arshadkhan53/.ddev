@@ -1,0 +1,57 @@
+
+additional_hostnames:
+  - au
+  - bd
+  - ca
+  - et
+  - gh
+  - ind
+  - jp
+  - mm
+  - mw
+  - mz
+  - ng
+  - pk
+  - se
+  - tz
+  - ug
+  - uk
+  - us
+
+hooks:
+  post-start:
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS au; GRANT ALL ON au.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS bd; GRANT ALL ON bd.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS ca; GRANT ALL ON ca.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS et; GRANT ALL ON et.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS gh; GRANT ALL ON gh.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS ind; GRANT ALL ON ind.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS jp; GRANT ALL ON jp.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS mm; GRANT ALL ON mm.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS mw; GRANT ALL ON mw.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS mz; GRANT ALL ON mz.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS ng; GRANT ALL ON ng.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS pk; GRANT ALL ON pk.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS se; GRANT ALL ON se.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS tz; GRANT ALL ON tz.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS ug; GRANT ALL ON ug.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS uk; GRANT ALL ON uk.* to 'db'@'%';"
+    service: db
+  - exec: mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS us; GRANT ALL ON us.* to 'db'@'%';"
+    service: db
+
